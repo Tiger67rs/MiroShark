@@ -9,7 +9,7 @@ import warnings
 # Must be set before all other imports
 warnings.filterwarnings("ignore", message=".*resource_tracker.*")
 
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 from flask_compress import Compress
 
@@ -19,7 +19,9 @@ from .utils.logger import setup_logger, get_logger
 
 def create_app(config_class=Config):
     """Flask application factory function"""
-    app = Flask(__name__)
+    # Resolve the built frontend static directory (backend/static/)
+    _static_folder = os.path.join(os.path.dirname(__file__), '..', 'static')
+    app = Flask(__name__, static_folder=_static_folder, static_url_path='')
     app.config.from_object(config_class)
     
     # Set JSON encoding: ensure non-ASCII characters are displayed directly (instead of \uXXXX format)
@@ -116,7 +118,26 @@ def create_app(config_class=Config):
     @app.route('/health')
     def health():
         return {'status': 'ok', 'service': 'MiroShark Backend'}
-    
+
+    # Serve built frontend assets (JS, CSS, images, etc.)
+    # Flask's static_folder is already set to backend/static, so files like
+    # /assets/index-abc123.js are served automatically by Flask's built-in
+    # static file handler.  We only need an explicit catch-all for SPA routing
+    # so that deep links (e.g. /graph/123) return index.html instead of 404.
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_spa(path):
+        static_dir = app.static_folder
+        # If the path maps to a real file in the static folder, serve it.
+        if path and os.path.exists(os.path.join(static_dir, path)):
+            return send_from_directory(static_dir, path)
+        # Otherwise fall back to index.html for SPA client-side routing.
+        index = os.path.join(static_dir, 'index.html')
+        if os.path.exists(index):
+            return send_from_directory(static_dir, 'index.html')
+        # No built frontend present — return a helpful message.
+        return {'error': 'Frontend not built. Run: npm run build'}, 404
+
     if should_log_startup:
         logger.info("MiroShark Backend startup complete")
     
