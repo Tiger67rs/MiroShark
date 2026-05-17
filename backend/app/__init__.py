@@ -19,8 +19,11 @@ from .utils.logger import setup_logger, get_logger
 
 def create_app(config_class=Config):
     """Flask application factory function"""
-    # Resolve the built frontend static directory (backend/static/)
+    # Resolve the built frontend static directory (backend/static/).
+    # Use the path only if the directory already exists so Flask/Werkzeug
+    # does not raise an error when the frontend hasn't been built yet.
     _static_folder = os.path.join(os.path.dirname(__file__), '..', 'static')
+    _static_folder = _static_folder if os.path.isdir(_static_folder) else None
     app = Flask(__name__, static_folder=_static_folder, static_url_path='')
     app.config.from_object(config_class)
     
@@ -128,6 +131,9 @@ def create_app(config_class=Config):
     @app.route('/<path:path>')
     def serve_spa(path):
         static_dir = app.static_folder
+        # If the static folder doesn't exist the frontend hasn't been built yet.
+        if not static_dir or not os.path.isdir(static_dir):
+            return {'error': 'Frontend not available. The static folder does not exist — run: npm run build'}, 503
         # If the path maps to a real file in the static folder, serve it.
         if path and os.path.exists(os.path.join(static_dir, path)):
             return send_from_directory(static_dir, path)

@@ -22,6 +22,10 @@ RUN npm ci --prefix frontend \
 # Copy project source code
 COPY . .
 
+# Ensure the static directory exists before the build so Flask can start
+# even if the frontend build step is skipped or fails partway through.
+RUN mkdir -p backend/static
+
 # Build the frontend and copy the dist into backend/static
 RUN npm run build
 
